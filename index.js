@@ -18,7 +18,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
-const { initializeDatabase, createGoal } = require("./database");
+const { initializeDatabase, createGoal, getGoalsByUserPaginated } = require("./database");
 const token = process.env.DISCORD_TOKEN;
 
 // Create a new client instance
@@ -52,6 +52,54 @@ for (const folder of commandFolders) {
 const goalCreationData = new Map();
 
 // Goal creation data is now handled by database.js
+
+// Helper functions for goal list display
+function formatGoalsList(result) {
+  const { goals, currentPage, totalPages, totalCount } = result;
+  
+  let content = `📋 **您的目標列表** (第 ${currentPage} 頁，共 ${totalPages} 頁)\n`;
+  content += `總共 ${totalCount} 個目標\n\n`;
+
+  goals.forEach((goal, index) => {
+    const goalNumber = (currentPage - 1) * 10 + index + 1;
+    content += `**${goalNumber}.** 📋 **${goal.name}**\n`;
+    content += `🆔 ID: \`${goal.id}\`\n`;
+    content += `📝 描述: ${goal.description || "無"}\n`;
+    content += `📅 建立時間: ${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}\n`;
+    content += `🔄 狀態: ${goal.status}\n`;
+    content += `${index < goals.length - 1 ? "---\n" : ""}`;
+  });
+
+  return content;
+}
+
+function createPaginationButtons(currentPage, totalPages) {
+  if (totalPages <= 1) return [];
+
+  const row = new ActionRowBuilder();
+
+  // Previous button
+  if (currentPage > 0) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`goals_page_${currentPage - 1}`)
+        .setLabel("◀ 上一頁")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  // Next button
+  if (currentPage < totalPages - 1) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`goals_page_${currentPage + 1}`)
+        .setLabel("▶ 下一頁")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  return row.components.length > 0 ? [row] : [];
+}
 
 // Handle button interactions
 async function handleButtonInteraction(interaction) {
@@ -104,6 +152,27 @@ async function handleButtonInteraction(interaction) {
                 `🆔 目標 ID：\`${goal.id}\`\n` +
                 `📝 描述：${goal.description || "無"}\n` +
                 `📅 建立時間：${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        components: [],
+      });
+    }
+  } else if (interaction.customId.startsWith("goals_page_")) {
+    // Handle goals pagination
+    const page = parseInt(interaction.customId.split("_")[2]);
+    const userId = interaction.user.id;
+
+    try {
+      const result = await getGoalsByUserPaginated(userId, 10, page * 10);
+      const content = formatGoalsList(result);
+      const components = createPaginationButtons(page, result.totalPages);
+
+      await interaction.update({
+        content: content,
+        components: components,
+      });
+    } catch (error) {
+      console.error('Error fetching goals page:', error);
+      await interaction.update({
+        content: "❌ 取得目標列表時發生錯誤，請稍後再試。",
         components: [],
       });
     }

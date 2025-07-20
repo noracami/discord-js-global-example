@@ -72,6 +72,38 @@ async function getGoalsByUser(userId) {
   }
 }
 
+async function getGoalsByUserPaginated(userId, limit = 10, offset = 0) {
+  const client = await pool.connect();
+  
+  try {
+    // Get total count
+    const countResult = await client.query(
+      'SELECT COUNT(*) FROM goals WHERE user_id = $1',
+      [userId]
+    );
+    const totalCount = parseInt(countResult.rows[0].count);
+    
+    // Get paginated results ordered by name
+    const result = await client.query(
+      'SELECT * FROM goals WHERE user_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3',
+      [userId, limit, offset]
+    );
+    
+    return {
+      goals: result.rows,
+      totalCount: totalCount,
+      hasMore: offset + limit < totalCount,
+      currentPage: Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(totalCount / limit)
+    };
+  } catch (error) {
+    console.error('Error fetching paginated goals:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function getGoalById(goalId) {
   const client = await pool.connect();
   
@@ -99,6 +131,7 @@ module.exports = {
   initializeDatabase,
   createGoal,
   getGoalsByUser,
+  getGoalsByUserPaginated,
   getGoalById,
   closeDatabase
 };
