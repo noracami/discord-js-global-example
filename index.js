@@ -18,7 +18,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
-const { initializeDatabase, createGoal, getGoalsByUserPaginated } = require("./database");
+const { initializeDatabase, createGoal, getGoalsByUserPaginated, createGoalReport, getGoalById } = require("./database");
 const token = process.env.DISCORD_TOKEN;
 
 // Create a new client instance
@@ -342,10 +342,111 @@ async function handleModalInteraction(interaction) {
         ephemeral: true,
       });
     }
+  } else if (interaction.customId.startsWith("completion_report_modal_")) {
+    // Handle completion type report
+    const goalId = interaction.customId.replace("completion_report_modal_", "");
+    const completionStatusText = interaction.fields.getTextInputValue("completion_status_input");
+    const notes = interaction.fields.getTextInputValue("notes_input");
+
+    try {
+      // Parse completion status
+      const completionStatus = ["是", "yes", "y", "完成", "1", "true"].includes(completionStatusText.toLowerCase().trim());
+      
+      const goal = await getGoalById(goalId);
+      if (!goal) {
+        await interaction.reply({
+          content: "❌ 找不到指定的目標。",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await createGoalReport(goalId, userId, completionStatus, null, notes || null);
+      
+      const statusEmoji = completionStatus ? "✅" : "❌";
+      const statusText = completionStatus ? "已完成" : "未完成";
+      
+      await interaction.reply({
+        content: `${statusEmoji} **回報成功！**\n\n` +
+                `📋 目標：**${goal.name}**\n` +
+                `📊 狀態：${statusText}\n` +
+                `📝 備註：${notes || "無"}\n` +
+                `📅 回報時間：${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error('Error creating completion report:', error);
+      await interaction.reply({
+        content: "❌ 提交回報時發生錯誤，請稍後再試。",
+        ephemeral: true,
+      });
+    }
+  } else if (interaction.customId.startsWith("numeric_report_modal_")) {
+    // Handle numeric type report
+    const goalId = interaction.customId.replace("numeric_report_modal_", "");
+    const numericValueText = interaction.fields.getTextInputValue("numeric_value_input");
+    const notes = interaction.fields.getTextInputValue("notes_input");
+
+    try {
+      const numericValue = parseFloat(numericValueText);
+      
+      if (isNaN(numericValue)) {
+        await interaction.reply({
+          content: "❌ 請輸入有效的數值。",
+          ephemeral: true,
+        });
+        return;
+      }
+      
+      const goal = await getGoalById(goalId);
+      if (!goal) {
+        await interaction.reply({
+          content: "❌ 找不到指定的目標。",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await createGoalReport(goalId, userId, null, numericValue, notes || null);
+      
+      const unitText = goal.unit ? ` ${goal.unit}` : "";
+      
+      await interaction.reply({
+        content: `📊 **回報成功！**\n\n` +
+                `📋 目標：**${goal.name}**\n` +
+                `📈 數值：**${numericValue}${unitText}**\n` +
+                `📝 備註：${notes || "無"}\n` +
+                `📅 回報時間：${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error('Error creating numeric report:', error);
+      await interaction.reply({
+        content: "❌ 提交回報時發生錯誤，請稍後再試。",
+        ephemeral: true,
+      });
+    }
   }
 }
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // Handle autocomplete
+  if (interaction.isAutocomplete()) {
+    const command = interaction.client.commands.get(interaction.commandName);
+
+    if (!command) {
+      console.error(`No command matching ${interaction.commandName} was found.`);
+      return;
+    }
+
+    try {
+      await command.autocomplete(interaction);
+    } catch (error) {
+      console.error('Error in autocomplete:', error);
+    }
+    return;
+  }
+
   // Handle slash commands
   if (interaction.isChatInputCommand()) {
     const command = interaction.client.commands.get(interaction.commandName);

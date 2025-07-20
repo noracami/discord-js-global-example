@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-07-20
+
+### Added
+- Goal progress reporting with `/r` command
+- Autocomplete functionality for goal selection
+- Support for completion type reports (yes/no + notes)
+- Support for numeric type reports (value + notes)
+- Goal reports database table with proper indexing
+- Multiple daily reports support for the same goal
+
 ## [0.2.0] - 2025-07-20
 
 ### Added

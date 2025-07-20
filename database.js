@@ -109,6 +109,79 @@ async function getGoalById(goalId) {
   }
 }
 
+// Goal report operations
+async function createGoalReport(goalId, userId, completionStatus = null, numericValue = null, notes = null) {
+  const client = await pool.connect();
+  
+  try {
+    const result = await client.query(
+      'INSERT INTO goal_reports (goal_id, user_id, completion_status, numeric_value, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [goalId, userId, completionStatus, numericValue, notes]
+    );
+    
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error creating goal report:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getGoalReportsByUser(userId, goalId = null, limit = 50) {
+  const client = await pool.connect();
+  
+  try {
+    let query = `
+      SELECT gr.*, g.name as goal_name, g.goal_type, g.unit 
+      FROM goal_reports gr 
+      JOIN goals g ON gr.goal_id = g.id 
+      WHERE gr.user_id = $1
+    `;
+    const params = [userId];
+    
+    if (goalId) {
+      query += ' AND gr.goal_id = $2';
+      params.push(goalId);
+    }
+    
+    query += ' ORDER BY gr.report_time DESC LIMIT $' + (params.length + 1);
+    params.push(limit);
+    
+    const result = await client.query(query, params);
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching goal reports:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function searchGoalsByUserForAutocomplete(userId, query = '') {
+  const client = await pool.connect();
+  
+  try {
+    const searchQuery = `
+      SELECT id, name, goal_type, unit 
+      FROM goals 
+      WHERE user_id = $1 
+      AND status = 'active'
+      AND (name ILIKE $2 OR $2 = '')
+      ORDER BY name ASC 
+      LIMIT 25
+    `;
+    
+    const result = await client.query(searchQuery, [userId, `%${query}%`]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error searching goals for autocomplete:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Gracefully close database connections
 async function closeDatabase() {
   await pool.end();
@@ -120,5 +193,8 @@ module.exports = {
   getGoalsByUser,
   getGoalsByUserPaginated,
   getGoalById,
+  createGoalReport,
+  getGoalReportsByUser,
+  searchGoalsByUserForAutocomplete,
   closeDatabase
 };
