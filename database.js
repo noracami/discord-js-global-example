@@ -20,6 +20,8 @@ async function initializeDatabase() {
         user_id VARCHAR(50) NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
+        goal_type VARCHAR(20) DEFAULT 'completion',
+        unit VARCHAR(50),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         status VARCHAR(20) DEFAULT 'active'
       )
@@ -35,14 +37,14 @@ async function initializeDatabase() {
 }
 
 // Goal data operations
-async function createGoal(userId, name, description = null) {
+async function createGoal(userId, name, description = null, goalType = 'completion', unit = null) {
   const id = "goal_" + Math.random().toString(36).substr(2, 9);
   const client = await pool.connect();
   
   try {
     const result = await client.query(
-      'INSERT INTO goals (id, user_id, name, description) VALUES ($1, $2, $3, $4) RETURNING *',
-      [id, userId, name, description]
+      'INSERT INTO goals (id, user_id, name, description, goal_type, unit) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [id, userId, name, description, goalType, unit]
     );
     
     return result.rows[0];

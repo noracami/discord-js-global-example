@@ -63,6 +63,16 @@ function formatGoalsList(result) {
   goals.forEach((goal, index) => {
     const goalNumber = (currentPage - 1) * 10 + index + 1;
     content += `**${goalNumber}.** 📋 **${goal.name}**\n`;
+    
+    // Format goal type display
+    let typeText = "完成型";
+    if (goal.goal_type === "numeric" && goal.unit) {
+      typeText = `數值型（${goal.unit}）`;
+    } else if (goal.goal_type === "numeric") {
+      typeText = "數值型";
+    }
+    
+    content += `🎯 類型: ${typeText}\n`;
     content += `🆔 ID: \`${goal.id}\`\n`;
     content += `📝 描述: ${goal.description || "無"}\n`;
     content += `📅 建立時間: ${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}\n`;
@@ -140,21 +150,80 @@ async function handleButtonInteraction(interaction) {
     const goalData = goalCreationData.get(userId);
 
     if (goalData) {
-      // Create goal with unique ID
-      const goal = await createGoal(userId, goalData.name, goalData.description);
+      // Create goal with type and unit information
+      const goal = await createGoal(
+        userId, 
+        goalData.name, 
+        goalData.description, 
+        goalData.goalType || 'completion', 
+        goalData.unit
+      );
       
       // Clean up temporary data
       goalCreationData.delete(userId);
 
+      // Format type display
+      let typeText = "完成型";
+      if (goal.goal_type === "numeric" && goal.unit) {
+        typeText = `數值型（${goal.unit}）`;
+      } else if (goal.goal_type === "numeric") {
+        typeText = "數值型";
+      }
+
       await interaction.update({
         content: `🎉 **目標建立成功！**\n\n` +
                 `📋 目標名稱：**${goal.name}**\n` +
+                `🎯 類型：${typeText}\n` +
                 `🆔 目標 ID：\`${goal.id}\`\n` +
                 `📝 描述：${goal.description || "無"}\n` +
                 `📅 建立時間：${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
         components: [],
       });
     }
+  } else if (interaction.customId === "select_completion_type") {
+    // Handle completion type selection
+    const userId = interaction.user.id;
+    const currentData = goalCreationData.get(userId);
+
+    if (currentData) {
+      currentData.goalType = "completion";
+      goalCreationData.set(userId, currentData);
+
+      // Create description and finish buttons
+      const descriptionButton = new ButtonBuilder()
+        .setCustomId("input_goal_description")
+        .setLabel("新增描述")
+        .setStyle(ButtonStyle.Secondary);
+
+      const finishButton = new ButtonBuilder()
+        .setCustomId("finish_goal_creation")
+        .setLabel("完成建立")
+        .setStyle(ButtonStyle.Success);
+
+      const row = new ActionRowBuilder().addComponents(descriptionButton, finishButton);
+
+      await interaction.update({
+        content: `✅ 目標名稱：**${currentData.name}**\n🎯 類型：完成型\n\n您可以選擇新增描述或直接完成建立：`,
+        components: [row],
+      });
+    }
+  } else if (interaction.customId === "select_numeric_type") {
+    // Handle numeric type selection - show unit input modal
+    const modal = new ModalBuilder()
+      .setCustomId("goal_unit_modal")
+      .setTitle("設定目標單位");
+
+    const unitInput = new TextInputBuilder()
+      .setCustomId("goal_unit_input")
+      .setLabel("單位")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder("例如：分鐘、公里、杯、頁數等...");
+
+    const row = new ActionRowBuilder().addComponents(unitInput);
+    modal.addComponents(row);
+
+    await interaction.showModal(modal);
   } else if (interaction.customId.startsWith("goals_page_")) {
     // Handle goals pagination
     const page = parseInt(interaction.customId.split("_")[2]);
@@ -189,21 +258,21 @@ async function handleModalInteraction(interaction) {
     // Store goal name temporarily
     goalCreationData.set(userId, { name: goalName });
 
-    // Create description button
-    const descriptionButton = new ButtonBuilder()
-      .setCustomId("input_goal_description")
-      .setLabel("新增描述")
+    // Create goal type selection buttons
+    const completionTypeButton = new ButtonBuilder()
+      .setCustomId("select_completion_type")
+      .setLabel("完成型")
+      .setStyle(ButtonStyle.Primary);
+
+    const numericTypeButton = new ButtonBuilder()
+      .setCustomId("select_numeric_type")
+      .setLabel("數值型")
       .setStyle(ButtonStyle.Secondary);
 
-    const finishButton = new ButtonBuilder()
-      .setCustomId("finish_goal_creation")
-      .setLabel("完成建立")
-      .setStyle(ButtonStyle.Success);
-
-    const row = new ActionRowBuilder().addComponents(descriptionButton, finishButton);
+    const row = new ActionRowBuilder().addComponents(completionTypeButton, numericTypeButton);
 
     await interaction.update({
-      content: `✅ 目標名稱：**${goalName}**\n\n您可以選擇新增描述或直接完成建立：`,
+      content: `✅ 目標名稱：**${goalName}**\n\n請選擇目標類型：\n📋 **完成型**：用於是/否類型的目標\n📊 **數值型**：用於需要記錄數值的目標`,
       components: [row],
     });
   } else if (interaction.customId === "goal_description_modal") {
@@ -223,6 +292,34 @@ async function handleModalInteraction(interaction) {
 
       await interaction.update({
         content: `✅ 目標名稱：**${currentData.name}**\n📝 目標描述：${goalDescription}\n\n點擊完成建立：`,
+        components: [row],
+      });
+    }
+  } else if (interaction.customId === "goal_unit_modal") {
+    const unit = interaction.fields.getTextInputValue("goal_unit_input");
+    const currentData = goalCreationData.get(userId);
+
+    if (currentData) {
+      currentData.goalType = "numeric";
+      currentData.unit = unit || null;
+      goalCreationData.set(userId, currentData);
+
+      // Create description and finish buttons
+      const descriptionButton = new ButtonBuilder()
+        .setCustomId("input_goal_description")
+        .setLabel("新增描述")
+        .setStyle(ButtonStyle.Secondary);
+
+      const finishButton = new ButtonBuilder()
+        .setCustomId("finish_goal_creation")
+        .setLabel("完成建立")
+        .setStyle(ButtonStyle.Success);
+
+      const row = new ActionRowBuilder().addComponents(descriptionButton, finishButton);
+
+      const unitText = unit ? `（${unit}）` : "";
+      await interaction.update({
+        content: `✅ 目標名稱：**${currentData.name}**\n🎯 類型：數值型${unitText}\n\n您可以選擇新增描述或直接完成建立：`,
         components: [row],
       });
     }
