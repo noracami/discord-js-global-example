@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-07-20
+
+### Added
+- `/today` command to view daily progress report
+- Custom "day" definition: 8:00 AM Taiwan time to 8:00 AM next day
+- Today progress categorization (completed, numeric, not completed, not reported)
+- Completion rate and achievement rate statistics
+- Time zone logic documentation
+
 ### Changed
 - Improved completion goal reporting UX with buttons instead of text input
 - Changed completion goal reporting flow: button selection → optional notes modal
+- Updated report_date calculation to use 8:00 AM Taiwan time logic
 
 ## [0.3.0] - 2025-07-20
 

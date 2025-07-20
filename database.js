@@ -114,9 +114,22 @@ async function createGoalReport(goalId, userId, completionStatus = null, numeric
   const client = await pool.connect();
   
   try {
+    // Calculate report_date using 8:00 AM Taiwan time logic
+    const now = new Date();
+    const taiwanTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+    const hour = taiwanTime.getHours();
+    
+    // If current time is before 8:00 AM, consider it as previous day
+    const reportDate = new Date(taiwanTime);
+    if (hour < 8) {
+      reportDate.setDate(reportDate.getDate() - 1);
+    }
+    
+    const reportDateString = reportDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
     const result = await client.query(
-      'INSERT INTO goal_reports (goal_id, user_id, completion_status, numeric_value, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [goalId, userId, completionStatus, numericValue, notes]
+      'INSERT INTO goal_reports (goal_id, user_id, completion_status, numeric_value, notes, report_date) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [goalId, userId, completionStatus, numericValue, notes, reportDateString]
     );
     
     return result.rows[0];
@@ -182,6 +195,93 @@ async function searchGoalsByUserForAutocomplete(userId, query = '') {
   }
 }
 
+async function getTodayProgressByUser(userId) {
+  const client = await pool.connect();
+  
+  try {
+    // Get all active goals for the user
+    const goalsQuery = `
+      SELECT id, name, goal_type, unit 
+      FROM goals 
+      WHERE user_id = $1 AND status = 'active'
+      ORDER BY name ASC
+    `;
+    const goalsResult = await client.query(goalsQuery, [userId]);
+    const goals = goalsResult.rows;
+
+    // Calculate "today" as 8:00 AM Taiwan time to 8:00 AM next day Taiwan time
+    // This means if current time is before 8:00 AM, we look at previous calendar day
+    const now = new Date();
+    const taiwanTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+    const hour = taiwanTime.getHours();
+    
+    // If current time is before 8:00 AM, consider it as previous day
+    const reportDate = new Date(taiwanTime);
+    if (hour < 8) {
+      reportDate.setDate(reportDate.getDate() - 1);
+    }
+    
+    const reportDateString = reportDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Get today's reports for these goals (8:00 AM to 8:00 AM cycle)
+    const reportsQuery = `
+      SELECT goal_id, completion_status, numeric_value, notes, report_time
+      FROM goal_reports 
+      WHERE user_id = $1 
+      AND report_date = $2
+      ORDER BY report_time DESC
+    `;
+    const reportsResult = await client.query(reportsQuery, [userId, reportDateString]);
+    const reports = reportsResult.rows;
+
+    // Create a map of goal_id to latest report for today
+    const todayReports = new Map();
+    reports.forEach(report => {
+      if (!todayReports.has(report.goal_id)) {
+        todayReports.set(report.goal_id, report);
+      }
+    });
+
+    // Categorize goals
+    const completed = [];
+    const notCompleted = [];
+    const numeric = [];
+    const notReported = [];
+
+    goals.forEach(goal => {
+      const report = todayReports.get(goal.id);
+      
+      if (!report) {
+        notReported.push(goal);
+      } else if (goal.goal_type === 'completion') {
+        if (report.completion_status) {
+          completed.push({ goal, report });
+        } else {
+          notCompleted.push({ goal, report });
+        }
+      } else if (goal.goal_type === 'numeric') {
+        numeric.push({ goal, report });
+      }
+    });
+
+    return {
+      goals,
+      completed,
+      notCompleted,
+      numeric,
+      notReported,
+      totalGoals: goals.length,
+      reportedGoals: completed.length + notCompleted.length + numeric.length,
+      completedGoals: completed.length + numeric.length // Numeric goals are considered "completed" if reported
+    };
+  } catch (error) {
+    console.error('Error fetching today progress:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Gracefully close database connections
 async function closeDatabase() {
   await pool.end();
@@ -196,5 +296,6 @@ module.exports = {
   createGoalReport,
   getGoalReportsByUser,
   searchGoalsByUserForAutocomplete,
+  getTodayProgressByUser,
   closeDatabase
 };
