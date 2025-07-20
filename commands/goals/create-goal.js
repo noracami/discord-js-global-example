@@ -19,16 +19,21 @@ module.exports = {
   async execute(interaction) {
     if (interaction.options.getSubcommand() !== "goal") return;
 
-    // 建立「輸入目標」按鈕
-    const goalInputButton = new ButtonBuilder()
-      .setCustomId("input_goal_name")
-      .setLabel("輸入目標")
+    // 建立目標類型選擇按鈕
+    const completionTypeButton = new ButtonBuilder()
+      .setCustomId("create_completion_goal")
+      .setLabel("📋 完成型")
       .setStyle(ButtonStyle.Primary);
 
-    const row = new ActionRowBuilder().addComponents(goalInputButton);
+    const numericTypeButton = new ButtonBuilder()
+      .setCustomId("create_numeric_goal")
+      .setLabel("📊 數值型")
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(completionTypeButton, numericTypeButton);
 
     await interaction.reply({
-      content: "點擊下方按鈕開始建立您的目標：",
+      content: "請選擇要建立的目標類型：\n\n📋 **完成型**：用於是/否類型的目標（如每日閱讀、運動習慣）\n📊 **數值型**：用於需要記錄數值的目標（如跑步距離、學習時間）",
       components: [row],
       ephemeral: true,
     });

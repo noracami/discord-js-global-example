@@ -113,20 +113,62 @@ function createPaginationButtons(currentPage, totalPages) {
 
 // Handle button interactions
 async function handleButtonInteraction(interaction) {
-  if (interaction.customId === "input_goal_name") {
+  if (interaction.customId === "create_completion_goal") {
+    // Show modal for completion type goal
     const modal = new ModalBuilder()
-      .setCustomId("goal_name_modal")
-      .setTitle("建立新目標");
+      .setCustomId("completion_goal_modal")
+      .setTitle("建立完成型目標");
 
     const goalNameInput = new TextInputBuilder()
       .setCustomId("goal_name_input")
       .setLabel("目標名稱")
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
-      .setPlaceholder("請輸入您的目標名稱...");
+      .setPlaceholder("例如：每日閱讀、運動30分鐘");
 
-    const row = new ActionRowBuilder().addComponents(goalNameInput);
-    modal.addComponents(row);
+    const goalDescriptionInput = new TextInputBuilder()
+      .setCustomId("goal_description_input")
+      .setLabel("目標描述（可選）")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(false)
+      .setPlaceholder("詳細描述您的目標...");
+
+    const nameRow = new ActionRowBuilder().addComponents(goalNameInput);
+    const descriptionRow = new ActionRowBuilder().addComponents(goalDescriptionInput);
+    modal.addComponents(nameRow, descriptionRow);
+
+    await interaction.showModal(modal);
+  } else if (interaction.customId === "create_numeric_goal") {
+    // Show modal for numeric type goal
+    const modal = new ModalBuilder()
+      .setCustomId("numeric_goal_modal")
+      .setTitle("建立數值型目標");
+
+    const goalNameInput = new TextInputBuilder()
+      .setCustomId("goal_name_input")
+      .setLabel("目標名稱")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder("例如：跑步、喝水、學習");
+
+    const goalUnitInput = new TextInputBuilder()
+      .setCustomId("goal_unit_input")
+      .setLabel("單位（可選）")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder("例如：分鐘、公里、杯、頁數");
+
+    const goalDescriptionInput = new TextInputBuilder()
+      .setCustomId("goal_description_input")
+      .setLabel("目標描述（可選）")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(false)
+      .setPlaceholder("詳細描述您的目標...");
+
+    const nameRow = new ActionRowBuilder().addComponents(goalNameInput);
+    const unitRow = new ActionRowBuilder().addComponents(goalUnitInput);
+    const descriptionRow = new ActionRowBuilder().addComponents(goalDescriptionInput);
+    modal.addComponents(nameRow, unitRow, descriptionRow);
 
     await interaction.showModal(modal);
   } else if (interaction.customId === "input_goal_description") {
@@ -252,75 +294,52 @@ async function handleButtonInteraction(interaction) {
 async function handleModalInteraction(interaction) {
   const userId = interaction.user.id;
 
-  if (interaction.customId === "goal_name_modal") {
+  if (interaction.customId === "completion_goal_modal") {
     const goalName = interaction.fields.getTextInputValue("goal_name_input");
-
-    // Store goal name temporarily
-    goalCreationData.set(userId, { name: goalName });
-
-    // Create goal type selection buttons
-    const completionTypeButton = new ButtonBuilder()
-      .setCustomId("select_completion_type")
-      .setLabel("完成型")
-      .setStyle(ButtonStyle.Primary);
-
-    const numericTypeButton = new ButtonBuilder()
-      .setCustomId("select_numeric_type")
-      .setLabel("數值型")
-      .setStyle(ButtonStyle.Secondary);
-
-    const row = new ActionRowBuilder().addComponents(completionTypeButton, numericTypeButton);
-
-    await interaction.update({
-      content: `✅ 目標名稱：**${goalName}**\n\n請選擇目標類型：\n📋 **完成型**：用於是/否類型的目標\n📊 **數值型**：用於需要記錄數值的目標`,
-      components: [row],
-    });
-  } else if (interaction.customId === "goal_description_modal") {
     const goalDescription = interaction.fields.getTextInputValue("goal_description_input");
-    const currentData = goalCreationData.get(userId);
 
-    if (currentData) {
-      currentData.description = goalDescription;
-      goalCreationData.set(userId, currentData);
-
-      const finishButton = new ButtonBuilder()
-        .setCustomId("finish_goal_creation")
-        .setLabel("完成建立")
-        .setStyle(ButtonStyle.Success);
-
-      const row = new ActionRowBuilder().addComponents(finishButton);
-
-      await interaction.update({
-        content: `✅ 目標名稱：**${currentData.name}**\n📝 目標描述：${goalDescription}\n\n點擊完成建立：`,
-        components: [row],
+    try {
+      const goal = await createGoal(userId, goalName, goalDescription, 'completion', null);
+      
+      await interaction.reply({
+        content: `🎉 **完成型目標建立成功！**\n\n` +
+                `📋 目標名稱：**${goal.name}**\n` +
+                `🎯 類型：完成型\n` +
+                `🆔 目標 ID：\`${goal.id}\`\n` +
+                `📝 描述：${goal.description || "無"}\n` +
+                `📅 建立時間：${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error('Error creating completion goal:', error);
+      await interaction.reply({
+        content: "❌ 建立目標時發生錯誤，請稍後再試。",
+        ephemeral: true,
       });
     }
-  } else if (interaction.customId === "goal_unit_modal") {
-    const unit = interaction.fields.getTextInputValue("goal_unit_input");
-    const currentData = goalCreationData.get(userId);
+  } else if (interaction.customId === "numeric_goal_modal") {
+    const goalName = interaction.fields.getTextInputValue("goal_name_input");
+    const goalUnit = interaction.fields.getTextInputValue("goal_unit_input");
+    const goalDescription = interaction.fields.getTextInputValue("goal_description_input");
 
-    if (currentData) {
-      currentData.goalType = "numeric";
-      currentData.unit = unit || null;
-      goalCreationData.set(userId, currentData);
-
-      // Create description and finish buttons
-      const descriptionButton = new ButtonBuilder()
-        .setCustomId("input_goal_description")
-        .setLabel("新增描述")
-        .setStyle(ButtonStyle.Secondary);
-
-      const finishButton = new ButtonBuilder()
-        .setCustomId("finish_goal_creation")
-        .setLabel("完成建立")
-        .setStyle(ButtonStyle.Success);
-
-      const row = new ActionRowBuilder().addComponents(descriptionButton, finishButton);
-
-      const unitText = unit ? `（${unit}）` : "";
-      await interaction.update({
-        content: `✅ 目標名稱：**${currentData.name}**\n🎯 類型：數值型${unitText}\n\n您可以選擇新增描述或直接完成建立：`,
-        components: [row],
+    try {
+      const goal = await createGoal(userId, goalName, goalDescription, 'numeric', goalUnit || null);
+      
+      const unitText = goal.unit ? `（${goal.unit}）` : "";
+      await interaction.reply({
+        content: `🎉 **數值型目標建立成功！**\n\n` +
+                `📋 目標名稱：**${goal.name}**\n` +
+                `🎯 類型：數值型${unitText}\n` +
+                `🆔 目標 ID：\`${goal.id}\`\n` +
+                `📝 描述：${goal.description || "無"}\n` +
+                `📅 建立時間：${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error('Error creating numeric goal:', error);
+      await interaction.reply({
+        content: "❌ 建立目標時發生錯誤，請稍後再試。",
+        ephemeral: true,
       });
     }
   }
