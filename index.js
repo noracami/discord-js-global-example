@@ -11,6 +11,12 @@ const {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 const token = process.env.DISCORD_TOKEN;
 
@@ -41,31 +47,189 @@ for (const folder of commandFolders) {
   }
 }
 
+// Store temporary goal data during creation process
+const goalCreationData = new Map();
+
+// Goal data storage functions
+function generateGoalId() {
+  return "goal_" + Math.random().toString(36).substr(2, 9);
+}
+
+async function createGoal(userId, name, description = null) {
+  const goal = {
+    id: generateGoalId(),
+    userId: userId,
+    name: name,
+    description: description,
+    createdAt: new Date().toISOString(),
+    status: "active"
+  };
+
+  // Load existing goals
+  let goals = [];
+  try {
+    const data = fs.readFileSync("goals.json", "utf8");
+    goals = JSON.parse(data);
+  } catch (error) {
+    // File doesn't exist or is empty, start with empty array
+    goals = [];
+  }
+
+  // Add new goal
+  goals.push(goal);
+
+  // Save back to file
+  fs.writeFileSync("goals.json", JSON.stringify(goals, null, 2));
+
+  return goal;
+}
+
+// Handle button interactions
+async function handleButtonInteraction(interaction) {
+  if (interaction.customId === "input_goal_name") {
+    const modal = new ModalBuilder()
+      .setCustomId("goal_name_modal")
+      .setTitle("建立新目標");
+
+    const goalNameInput = new TextInputBuilder()
+      .setCustomId("goal_name_input")
+      .setLabel("目標名稱")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder("請輸入您的目標名稱...");
+
+    const row = new ActionRowBuilder().addComponents(goalNameInput);
+    modal.addComponents(row);
+
+    await interaction.showModal(modal);
+  } else if (interaction.customId === "input_goal_description") {
+    const modal = new ModalBuilder()
+      .setCustomId("goal_description_modal")
+      .setTitle("新增目標描述");
+
+    const goalDescriptionInput = new TextInputBuilder()
+      .setCustomId("goal_description_input")
+      .setLabel("目標描述")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(false)
+      .setPlaceholder("請輸入目標的詳細描述（可選）...");
+
+    const row = new ActionRowBuilder().addComponents(goalDescriptionInput);
+    modal.addComponents(row);
+
+    await interaction.showModal(modal);
+  } else if (interaction.customId === "finish_goal_creation") {
+    const userId = interaction.user.id;
+    const goalData = goalCreationData.get(userId);
+
+    if (goalData) {
+      // Create goal with unique ID
+      const goal = await createGoal(userId, goalData.name, goalData.description);
+      
+      // Clean up temporary data
+      goalCreationData.delete(userId);
+
+      await interaction.update({
+        content: `🎉 **目標建立成功！**\n\n` +
+                `📋 目標名稱：**${goal.name}**\n` +
+                `🆔 目標 ID：\`${goal.id}\`\n` +
+                `📝 描述：${goal.description || "無"}\n` +
+                `📅 建立時間：${new Date(goal.createdAt).toLocaleString("zh-TW")}`,
+        components: [],
+      });
+    }
+  }
+}
+
+// Handle modal interactions
+async function handleModalInteraction(interaction) {
+  const userId = interaction.user.id;
+
+  if (interaction.customId === "goal_name_modal") {
+    const goalName = interaction.fields.getTextInputValue("goal_name_input");
+
+    // Store goal name temporarily
+    goalCreationData.set(userId, { name: goalName });
+
+    // Create description button
+    const descriptionButton = new ButtonBuilder()
+      .setCustomId("input_goal_description")
+      .setLabel("新增描述")
+      .setStyle(ButtonStyle.Secondary);
+
+    const finishButton = new ButtonBuilder()
+      .setCustomId("finish_goal_creation")
+      .setLabel("完成建立")
+      .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder().addComponents(descriptionButton, finishButton);
+
+    await interaction.update({
+      content: `✅ 目標名稱：**${goalName}**\n\n您可以選擇新增描述或直接完成建立：`,
+      components: [row],
+    });
+  } else if (interaction.customId === "goal_description_modal") {
+    const goalDescription = interaction.fields.getTextInputValue("goal_description_input");
+    const currentData = goalCreationData.get(userId);
+
+    if (currentData) {
+      currentData.description = goalDescription;
+      goalCreationData.set(userId, currentData);
+
+      const finishButton = new ButtonBuilder()
+        .setCustomId("finish_goal_creation")
+        .setLabel("完成建立")
+        .setStyle(ButtonStyle.Success);
+
+      const row = new ActionRowBuilder().addComponents(finishButton);
+
+      await interaction.update({
+        content: `✅ 目標名稱：**${currentData.name}**\n📝 目標描述：${goalDescription}\n\n點擊完成建立：`,
+        components: [row],
+      });
+    }
+  }
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  // Handle slash commands
+  if (interaction.isChatInputCommand()) {
+    const command = interaction.client.commands.get(interaction.commandName);
 
-  const command = interaction.client.commands.get(interaction.commandName);
+    if (!command) {
+      console.error(`No command matching ${interaction.commandName} was found.`);
+      return;
+    }
 
-  if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
+    try {
+      await command.execute(interaction);
+    } catch (error) {
+      console.error(error);
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({
+          content: "There was an error while executing this command!",
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          content: "There was an error while executing this command!",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
     return;
   }
 
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: "There was an error while executing this command!",
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.reply({
-        content: "There was an error while executing this command!",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+  // Handle button interactions
+  if (interaction.isButton()) {
+    await handleButtonInteraction(interaction);
+    return;
+  }
+
+  // Handle modal interactions
+  if (interaction.isModalSubmit()) {
+    await handleModalInteraction(interaction);
+    return;
   }
 });
 
