@@ -9,30 +9,15 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Initialize database tables
+// Initialize database using migrations
 async function initializeDatabase() {
-  const client = await pool.connect();
+  const { runMigrations } = require('./migrations');
   try {
-    // Create goals table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS goals (
-        id VARCHAR(50) PRIMARY KEY,
-        user_id VARCHAR(50) NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        goal_type VARCHAR(20) DEFAULT 'completion',
-        unit VARCHAR(50),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        status VARCHAR(20) DEFAULT 'active'
-      )
-    `);
-    
-    console.log('Database tables initialized successfully');
+    await runMigrations();
+    console.log('Database migrations completed successfully');
   } catch (error) {
-    console.error('Error initializing database:', error);
+    console.error('Error running database migrations:', error);
     throw error;
-  } finally {
-    client.release();
   }
 }
 
