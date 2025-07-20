@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Improved completion goal reporting UX with buttons instead of text input
+- Changed completion goal reporting flow: button selection → optional notes modal
+
 ## [0.3.0] - 2025-07-20
 
 ### Added

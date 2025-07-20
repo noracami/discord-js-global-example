@@ -4,6 +4,8 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 const { searchGoalsByUserForAutocomplete, getGoalById } = require("../../database");
 
@@ -68,32 +70,26 @@ module.exports = {
         return;
       }
 
-      // 根據目標類型顯示不同的 Modal
+      // 根據目標類型顯示不同的介面
       if (goal.goal_type === "completion") {
-        // 完成型目標 Modal
-        const modal = new ModalBuilder()
-          .setCustomId(`completion_report_modal_${goalId}`)
-          .setTitle(`回報：${goal.name}`);
+        // 完成型目標使用按鈕
+        const completedButton = new ButtonBuilder()
+          .setCustomId(`completion_report_yes_${goalId}`)
+          .setLabel("✅ 已完成")
+          .setStyle(ButtonStyle.Success);
 
-        const completionInput = new TextInputBuilder()
-          .setCustomId("completion_status_input")
-          .setLabel("是否完成？")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setPlaceholder("輸入 是 或 否");
+        const notCompletedButton = new ButtonBuilder()
+          .setCustomId(`completion_report_no_${goalId}`)
+          .setLabel("❌ 未完成")
+          .setStyle(ButtonStyle.Secondary);
 
-        const notesInput = new TextInputBuilder()
-          .setCustomId("notes_input")
-          .setLabel("備註（可選）")
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(false)
-          .setPlaceholder("今天的心得或備註...");
+        const row = new ActionRowBuilder().addComponents(completedButton, notCompletedButton);
 
-        const completionRow = new ActionRowBuilder().addComponents(completionInput);
-        const notesRow = new ActionRowBuilder().addComponents(notesInput);
-        modal.addComponents(completionRow, notesRow);
-
-        await interaction.showModal(modal);
+        await interaction.reply({
+          content: `📋 **${goal.name}**\n\n請選擇今天的完成狀態：`,
+          components: [row],
+          ephemeral: true,
+        });
       } else if (goal.goal_type === "numeric") {
         // 數值型目標 Modal
         const modal = new ModalBuilder()

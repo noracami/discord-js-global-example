@@ -287,6 +287,45 @@ async function handleButtonInteraction(interaction) {
         components: [],
       });
     }
+  } else if (interaction.customId.startsWith("completion_report_yes_") || interaction.customId.startsWith("completion_report_no_")) {
+    // Handle completion report buttons
+    const isCompleted = interaction.customId.startsWith("completion_report_yes_");
+    const goalId = interaction.customId.replace(isCompleted ? "completion_report_yes_" : "completion_report_no_", "");
+    const userId = interaction.user.id;
+
+    try {
+      const goal = await getGoalById(goalId);
+      if (!goal) {
+        await interaction.update({
+          content: "❌ 找不到指定的目標。",
+          components: [],
+        });
+        return;
+      }
+
+      // Show notes modal after button selection
+      const modal = new ModalBuilder()
+        .setCustomId(`completion_notes_modal_${goalId}_${isCompleted}`)
+        .setTitle(`回報：${goal.name}`);
+
+      const notesInput = new TextInputBuilder()
+        .setCustomId("notes_input")
+        .setLabel("備註（可選）")
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(false)
+        .setPlaceholder("今天的心得或備註...");
+
+      const notesRow = new ActionRowBuilder().addComponents(notesInput);
+      modal.addComponents(notesRow);
+
+      await interaction.showModal(modal);
+    } catch (error) {
+      console.error('Error handling completion report button:', error);
+      await interaction.update({
+        content: "❌ 處理回報時發生錯誤，請稍後再試。",
+        components: [],
+      });
+    }
   }
 }
 
@@ -342,16 +381,14 @@ async function handleModalInteraction(interaction) {
         ephemeral: true,
       });
     }
-  } else if (interaction.customId.startsWith("completion_report_modal_")) {
-    // Handle completion type report
-    const goalId = interaction.customId.replace("completion_report_modal_", "");
-    const completionStatusText = interaction.fields.getTextInputValue("completion_status_input");
+  } else if (interaction.customId.startsWith("completion_notes_modal_")) {
+    // Handle completion notes modal
+    const parts = interaction.customId.replace("completion_notes_modal_", "").split("_");
+    const goalId = parts[0];
+    const isCompleted = parts[1] === "true";
     const notes = interaction.fields.getTextInputValue("notes_input");
 
     try {
-      // Parse completion status
-      const completionStatus = ["是", "yes", "y", "完成", "1", "true"].includes(completionStatusText.toLowerCase().trim());
-      
       const goal = await getGoalById(goalId);
       if (!goal) {
         await interaction.reply({
@@ -361,10 +398,10 @@ async function handleModalInteraction(interaction) {
         return;
       }
 
-      await createGoalReport(goalId, userId, completionStatus, null, notes || null);
+      await createGoalReport(goalId, userId, isCompleted, null, notes || null);
       
-      const statusEmoji = completionStatus ? "✅" : "❌";
-      const statusText = completionStatus ? "已完成" : "未完成";
+      const statusEmoji = isCompleted ? "✅" : "❌";
+      const statusText = isCompleted ? "已完成" : "未完成";
       
       await interaction.reply({
         content: `${statusEmoji} **回報成功！**\n\n` +
