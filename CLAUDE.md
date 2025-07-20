@@ -21,6 +21,7 @@ The bot requires a `.env` file with:
 - `DISCORD_TOKEN`: Bot token from Discord Developer Portal
 - `CLIENT_ID`: Application ID from Discord Developer Portal
 - `GUILD_ID`: Server ID for guild-specific command deployment
+- `DATABASE_URL`: PostgreSQL connection string (e.g., `postgresql://user:password@localhost:5432/dbname`)
 
 ## Architecture
 
@@ -41,6 +42,14 @@ Commands follow this structure:
 - Example: `commands/utility/ping.js`
 
 The bot uses a Collection to store commands and dynamically loads all `.js` files from command folders. Error handling is built-in for command execution failures.
+
+### Data Persistence
+
+- **Database**: PostgreSQL for persistent data storage
+- **Database module**: `database.js` handles all database operations
+- **Tables**: 
+  - `goals`: Stores user goals with unique IDs, names, descriptions, and timestamps
+- **Connection**: Uses connection pooling for efficient database access
 
 ## Project Management
 

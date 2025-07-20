@@ -18,6 +18,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
+const { initializeDatabase, createGoal } = require("./database");
 const token = process.env.DISCORD_TOKEN;
 
 // Create a new client instance
@@ -50,39 +51,7 @@ for (const folder of commandFolders) {
 // Store temporary goal data during creation process
 const goalCreationData = new Map();
 
-// Goal data storage functions
-function generateGoalId() {
-  return "goal_" + Math.random().toString(36).substr(2, 9);
-}
-
-async function createGoal(userId, name, description = null) {
-  const goal = {
-    id: generateGoalId(),
-    userId: userId,
-    name: name,
-    description: description,
-    createdAt: new Date().toISOString(),
-    status: "active"
-  };
-
-  // Load existing goals
-  let goals = [];
-  try {
-    const data = fs.readFileSync("goals.json", "utf8");
-    goals = JSON.parse(data);
-  } catch (error) {
-    // File doesn't exist or is empty, start with empty array
-    goals = [];
-  }
-
-  // Add new goal
-  goals.push(goal);
-
-  // Save back to file
-  fs.writeFileSync("goals.json", JSON.stringify(goals, null, 2));
-
-  return goal;
-}
+// Goal creation data is now handled by database.js
 
 // Handle button interactions
 async function handleButtonInteraction(interaction) {
@@ -134,7 +103,7 @@ async function handleButtonInteraction(interaction) {
                 `📋 目標名稱：**${goal.name}**\n` +
                 `🆔 目標 ID：\`${goal.id}\`\n` +
                 `📝 描述：${goal.description || "無"}\n` +
-                `📅 建立時間：${new Date(goal.createdAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+                `📅 建立時間：${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
         components: [],
       });
     }
@@ -236,8 +205,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // When the client is ready, run this code (only once).
 // The distinction between `client: Client<boolean>` and `readyClient: Client<true>` is important for TypeScript developers.
 // It makes some properties non-nullable.
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+  
+  // Initialize database
+  try {
+    await initializeDatabase();
+    console.log('Database connection established and tables initialized');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    process.exit(1);
+  }
 });
 
 // Log in to Discord with your client's token
