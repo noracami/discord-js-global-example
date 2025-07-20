@@ -58,6 +58,16 @@ function formatGoalsList(result) {
   goals.forEach((goal, index) => {
     const goalNumber = (currentPage - 1) * 10 + index + 1;
     content += `**${goalNumber}.** 📋 **${goal.name}**\n`;
+    
+    // Format goal type display
+    let typeText = "完成型";
+    if (goal.goal_type === "numeric" && goal.unit) {
+      typeText = `數值型（${goal.unit}）`;
+    } else if (goal.goal_type === "numeric") {
+      typeText = "數值型";
+    }
+    
+    content += `🎯 類型: ${typeText}\n`;
     content += `🆔 ID: \`${goal.id}\`\n`;
     content += `📝 描述: ${goal.description || "無"}\n`;
     content += `📅 建立時間: ${new Date(goal.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}\n`;
