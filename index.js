@@ -290,7 +290,9 @@ async function handleButtonInteraction(interaction) {
   } else if (interaction.customId.startsWith("completion_report_yes_") || interaction.customId.startsWith("completion_report_no_")) {
     // Handle completion report buttons
     const isCompleted = interaction.customId.startsWith("completion_report_yes_");
-    const goalId = interaction.customId.replace(isCompleted ? "completion_report_yes_" : "completion_report_no_", "");
+    const goalId = isCompleted 
+      ? interaction.customId.replace("completion_report_yes_", "")
+      : interaction.customId.replace("completion_report_no_", "");
     const userId = interaction.user.id;
 
     try {
