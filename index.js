@@ -134,7 +134,7 @@ async function handleButtonInteraction(interaction) {
                 `📋 目標名稱：**${goal.name}**\n` +
                 `🆔 目標 ID：\`${goal.id}\`\n` +
                 `📝 描述：${goal.description || "無"}\n` +
-                `📅 建立時間：${new Date(goal.createdAt).toLocaleString("zh-TW")}`,
+                `📅 建立時間：${new Date(goal.createdAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
         components: [],
       });
     }
